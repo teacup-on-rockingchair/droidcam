@@ -155,12 +155,13 @@ static void LoadSaveSettings(int load)
 		}
 
 		if(fgets(buf, sizeof(buf), fp)) {
+			buf[strlen(buf)-1] = '\0';
 			gtk_entry_set_text(g_settings.portEntry, buf);
 		}
 
 	}
 	else {
-		fprintf(fp, "%d-%d\n%s\n%s", g_settings.width, g_settings.height, gtk_entry_get_text(g_settings.ipEntry), gtk_entry_get_text(g_settings.portEntry));
+		fprintf(fp, "%d-%d\n%s\n%s\n", g_settings.width, g_settings.height, gtk_entry_get_text(g_settings.ipEntry), gtk_entry_get_text(g_settings.portEntry));
 	}
 	fclose(fp);
 }
