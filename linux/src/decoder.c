@@ -44,7 +44,10 @@ static uint8_t * m_shareFrameBuf = NULL; // buffer for the webcam
 static int m_shareFrameBufSize;
 
 // static GThread* hDisplayThread = NULL;
+#if 0 // tc_on_rc seems all H263 is if 0 for now
 static unsigned m_DecodeSeqNum, m_DisplaySeqNum; // Used in H263 for thread sync
+#endif /* 0 */
+
 
 static AVPacket        v_packet;
 static AVCodec        *v_codec_b, *v_codec_c;
@@ -54,7 +57,10 @@ static AVFrame        *decode_frame = NULL; // decoded frames
 static AVFrame        *share_frame  = NULL; // resized frames (mapped to m_shareFrameBuf)
 
 static AVFrame * scan_frame = NULL;// used for H263 to resize into back-buffer
+#if 0 // tc_on_rc seems all H263 is if 0 for now
 static uint8_t * scan_ptr   = NULL;// scans back-buffer (m_videoStreamBuf)
+#endif /* 0 */
+
 
 static int xioctl(int fd, int request, void *arg){
     int r;
@@ -152,10 +158,10 @@ int  decoder_init(int w, int h){
         goto _error_out;
     }
 
-    avcodec_init();
+
     avcodec_register_all();
 
-    share_frame = avcodec_alloc_frame();
+    share_frame = av_frame_alloc();
     m_shareFrameBuf = (uint8_t*)av_malloc( m_shareFrameBufSize * sizeof(uint8_t));
     avpicture_fill((AVPicture *)share_frame, m_shareFrameBuf, PIX_FMT_YUV420P, share_w, share_h);
     SHARE_FRAME(m_shareFrameBuf, m_shareFrameBufSize);
@@ -202,19 +208,23 @@ int decoder_prepare_video(char * header)
     if (m_format == 0) m_format = 3;
     dbgprint("W=%d H=%d Fmt=%d (%d)\n", m_width, m_height, m_format, (int) header[4]);
 
-    decode_frame = avcodec_alloc_frame();
+    decode_frame = av_frame_alloc();
 
     if (m_format == VIDEO_FMT_YUV) {
         m_videoStreamBufSize = 0;
         m_videoStreamFrameLen = YUV_BUFFER_SZ(m_width, m_height);
         m_videoStreamBuf = (uint8_t*)av_malloc((m_videoStreamFrameLen + VIDEO_INBUF_SZ) * sizeof(uint8_t));
 
-        swc = sws_getContext(m_width, m_height, PIX_FMT_NV21, /* src */
+		/* tc_on_rc sws_getContext - deprecated*/
+        swc =  sws_getCachedContext(swc, m_width, m_height, PIX_FMT_NV21, /* src */
                              share_w, share_h , PIX_FMT_YUV420P, /* dst */
                              SWS_FAST_BILINEAR /* flags */, NULL, NULL, NULL);
         dbgprint("yuv buffer %p\n", m_videoStreamBuf);
     } else {
-        v_context = avcodec_alloc_context();
+	if (m_format == VIDEO_FMT_H263)
+		v_context = avcodec_alloc_context3( v_codec_b);
+	else
+		v_context = avcodec_alloc_context3( v_codec_c);
 
         if (!v_context || !decode_frame){
             MSG_ERROR("Decoder Error (2)");
@@ -225,7 +235,8 @@ int decoder_prepare_video(char * header)
         v_context->height  = m_height;
         dbgprint("v_context ... w=%d, h=%d \n", m_width, m_height);
 
-        swc = sws_getContext(m_width, m_height, PIX_FMT_YUV420P, /* src */
+		/*tc_on_rc  sws_getContext - deprecated*/
+        swc = sws_getCachedContext(swc, m_width, m_height, PIX_FMT_YUV420P, /* src */
                                  share_w, share_h , PIX_FMT_YUV420P, /* dst */
                                  SWS_FAST_BILINEAR /* flags */, NULL, NULL, NULL);
 
@@ -260,7 +271,7 @@ int decoder_prepare_video(char * header)
             #endif
         }
         else {
-            if (avcodec_open(v_context, v_codec_c) < 0) {
+	if (avcodec_open2(v_context, v_codec_c, NULL) < 0) {
                 MSG_ERROR("Decoder Error (4)");
                 goto _error_out;
             }
@@ -308,7 +319,7 @@ int DecodeVideo(char * data, int length)
         if ( m_videoStreamBufSize >= m_videoStreamFrameLen ) // Have a complete YUV frame
         {
             avpicture_fill((AVPicture *)decode_frame, m_videoStreamBuf, PIX_FMT_NV21, m_width, m_height);
-            sws_scale(swc, decode_frame->data, decode_frame->linesize, 0, m_height, share_frame->data, share_frame->linesize);
+            sws_scale(swc,(const uint8_t * const*) decode_frame->data, decode_frame->linesize, 0, m_height, share_frame->data, share_frame->linesize);
             SHARE_FRAME(m_shareFrameBuf, m_shareFrameBufSize);
 
             m_videoStreamBufSize -= m_videoStreamFrameLen; // shift back
@@ -344,7 +355,7 @@ int DecodeVideo(char * data, int length)
                 printf("VIDEO DECODE ERROR (%d)\n", have_frame);
                 return FALSE;
             }
-            sws_scale(swc, decode_frame->data, decode_frame->linesize, 0, m_height, share_frame->data, share_frame->linesize);
+            sws_scale(swc,(const uint8_t * const*) decode_frame->data, decode_frame->linesize, 0, m_height, share_frame->data, share_frame->linesize);
             SHARE_FRAME(m_shareFrameBuf, m_shareFrameBufSize);
 
             m_videoStreamBufSize -= len; // shift back

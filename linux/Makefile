@@ -7,15 +7,16 @@
 # Use at your own risk. See README file for more details.
 
 GTK  = `pkg-config --libs --cflags gtk+-2.0`
-LIBS     = -lgthread-2.0 -lbluetooth -Lffmpeg/ -lavcodec  -lavcore  -lavutil  -lswscale -lopencore-amrnb
+LIBS     = -lgthread-2.0 -lbluetooth -lavcodec -lavutil  -lswscale #-lopencore-amrnb -lavcore
 SRC      = src/droidcam.c src/connection.c src/decoder.c
 SRC_CLI  = src/droidcam-cli.c src/connection.c src/decoder.c
 
+
 all:
-	gcc -Wall -Iffmpeg/include $(SRC) $(LIBS) $(GTK) -o droidcam
+	gcc -Wall  $(SRC) $(LIBS) $(GTK) -o droidcam
 
 cli:
-	gcc -Wall -Iffmpeg/include $(SRC_CLI) $(LIBS) -lm -o droidcam-cli
+	gcc -Wall $(SRC_CLI) $(LIBS) -lm -o droidcam-cli
 
 clean:
 	rm droidcam || true

@@ -308,6 +308,7 @@ accel_callback( GtkAccelGroup  *group,
 	if(v_running == 1 && thread_cmd ==0 && m_format != VIDEO_FMT_H263){
 		thread_cmd = (int) user_data;
 	}
+	return TRUE;
 }
 
 
@@ -339,7 +340,7 @@ _up:
 					if (CheckAdbDevices(port) != 8) return;
 					ip = "127.0.0.1";
 				} else if (g_settings.connection == CB_RADIO_WIFI && wifi_srvr_mode == 0) {
-					ip = gtk_entry_get_text(g_settings.ipEntry);
+					ip = (char *)gtk_entry_get_text(g_settings.ipEntry);
 				}
 
 				if (ip != NULL) // Not Bluetooth or "Server Mode", so connect first
@@ -359,7 +360,7 @@ _up:
 					}
 				}
 
-				hVideoThread = g_thread_create(VideoThreadProc, (void*)s, TRUE, NULL);
+				hVideoThread = g_thread_new("VideoThreadProc" , VideoThreadProc, (void*)s);
 				gtk_button_set_label(g_settings.button, "Stop");
 				//gtk_widget_set_sensitive(GTK_WIDGET(g_settings.button), FALSE);
 
@@ -394,7 +395,7 @@ _up:
 			ipEdit = FALSE;
 		break;
 		case CB_BTN_OTR:
-			gtk_menu_popup(GTK_MENU(menu), NULL, NULL, NULL, NULL, 0, NULL);
+			gtk_menu_popup(GTK_MENU(menu), NULL, NULL, NULL, NULL, 0, 0);
 		break;
 		case CB_CONTROL_ZIN  :
 		case CB_CONTROL_ZOUT :
@@ -425,7 +426,9 @@ int main(int argc, char *argv[])
 	GtkWidget *widget; // generic stuff
 
 	// init threads
+/* tc_on_rc deprecated
 	g_thread_init(NULL);
+*/
 	gdk_threads_init();
 	gtk_init(&argc, &argv);
 
@@ -510,7 +513,7 @@ int main(int argc, char *argv[])
 	hbox2 = gtk_hbox_new(FALSE, 1);
 	widget = gtk_button_new_with_label("...");
 	gtk_widget_set_size_request(widget, 40, 28);
-	g_signal_connect(widget, "clicked", G_CALLBACK(the_callback), CB_BTN_OTR);
+	g_signal_connect(widget, "clicked", G_CALLBACK(the_callback), (gpointer)CB_BTN_OTR);
 	gtk_box_pack_start(GTK_BOX(hbox2), widget, FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(vbox), hbox2, FALSE, FALSE, 0);
 
