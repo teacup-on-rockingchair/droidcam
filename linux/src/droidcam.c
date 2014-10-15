@@ -299,6 +299,8 @@ static gint button_press_event(GtkWidget *widget, GdkEvent *event){
 	return FALSE;
 }
 */
+
+
 static gboolean
 accel_callback( GtkAccelGroup  *group,
 		  GObject		*obj,
@@ -418,20 +420,16 @@ _up:
 	}
 }
 
-
-int main(int argc, char *argv[])
+/** 
+ * 
+ * @brief create GTK Window for the app
+ * 
+ *
+ * @return 
+ */
+GtkWidget *DroidCamGtkWindow()
 {
-	GtkWidget *window;
-	GtkWidget *hbox, *hbox2;
-	GtkWidget *vbox;
-	GtkWidget *widget; // generic stuff
-
-	// init threads
-/* tc_on_rc deprecated
-	g_thread_init(NULL);
-*/
-	gdk_threads_init();
-	gtk_init(&argc, &argv);
+	GtkWidget *window = NULL;
 
 	window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
 	gtk_window_set_title(GTK_WINDOW(window), "DroidCam Client");
@@ -441,23 +439,45 @@ int main(int argc, char *argv[])
 	gtk_container_set_border_width(GTK_CONTAINER(window), 10);
 //	gtk_widget_set_size_request(window, 250, 120);
 	gtk_window_set_icon(GTK_WINDOW(window), gdk_pixbuf_new_from_inline(-1, icon_inline, FALSE, NULL));
+	
+	return window;
 
- {
+}
+
+
+/** 
+ * 
+ * @brief setup accelerators for app's window
+ * 
+ * @param window - hook accelerators to that window
+ */
+void DroidCamGtkSetupAccelerators( GtkWidget *window)
+{
 	GtkAccelGroup *gtk_accel = gtk_accel_group_new ();
 	GClosure *closure = g_cclosure_new(G_CALLBACK(accel_callback), (gpointer)(CB_CONTROL_AF-10), NULL);
 	gtk_accel_group_connect(gtk_accel, gdk_keyval_from_name("a"), GDK_CONTROL_MASK, GTK_ACCEL_VISIBLE, closure);
-
+	
 	closure = g_cclosure_new(G_CALLBACK(accel_callback), (gpointer)(CB_CONTROL_LED-10), NULL);
 	gtk_accel_group_connect(gtk_accel, gdk_keyval_from_name("l"), GDK_CONTROL_MASK, GTK_ACCEL_VISIBLE, closure);
-
+	
 	closure = g_cclosure_new(G_CALLBACK(accel_callback), (gpointer)(CB_CONTROL_ZOUT-10), NULL);
 	gtk_accel_group_connect(gtk_accel, gdk_keyval_from_name("minus"), 0, GTK_ACCEL_VISIBLE, closure);
-
+	
 	closure = g_cclosure_new(G_CALLBACK(accel_callback), (gpointer)(CB_CONTROL_ZIN-10), NULL);
 	gtk_accel_group_connect(gtk_accel, gdk_keyval_from_name("equal"), 0, GTK_ACCEL_VISIBLE, closure);
-
+	
 	gtk_window_add_accel_group(GTK_WINDOW(window), gtk_accel);
- }
+}
+
+/** 
+ * 
+ * @brief set up app's menu
+ * 
+ */
+void DroidCamGtkSetupMenu()
+{
+	GtkWidget *widget = NULL;
+
 	menu = gtk_menu_new();
 
 	widget = gtk_menu_item_new_with_label("DroidCamX Commands:");
@@ -485,25 +505,168 @@ int main(int argc, char *argv[])
 	gtk_widget_show (widget);
 	g_signal_connect(widget, "activate", G_CALLBACK(the_callback), (gpointer)CB_CONTROL_ZOUT);
 
-	hbox = gtk_hbox_new(FALSE, 50);
-	gtk_container_add(GTK_CONTAINER(window), hbox);
+}
 
-	// Toggle buttons
-	vbox = gtk_vbox_new(FALSE, 1);
+void DroidCamGtkAddVideoPropertiesButton(GtkWidget *container_box)
+{
+	GtkWidget *button_box = NULL;
+	GtkWidget *widget; // generic stuff
+
+	button_box = gtk_hbox_new(FALSE, 1);
+	widget = gtk_button_new_with_label("...");
+	gtk_widget_set_size_request(widget, 40, 28);
+	g_signal_connect(widget, "clicked", G_CALLBACK(the_callback), (gpointer)CB_BTN_OTR);
+	gtk_box_pack_start(GTK_BOX(button_box), widget, FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(container_box), button_box, FALSE, FALSE, 0);
+
+}
+
+
+/** 
+ * 
+ * @brief add controls to configre type of connection with the android device
+ * 
+ * @param container_box - container for the controls
+ *
+ * @return 
+ */
+void DroidCamGtkAddTypeConnCtrl(GtkWidget *container_box)
+{
+	GtkWidget *radio_box = NULL;
+	GtkWidget *widget; // generic stuff
+
+	radio_box = gtk_vbox_new(FALSE, 1);
 
 	widget = gtk_radio_button_new_with_label(NULL, "WiFi / LAN");
 	gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON(widget), TRUE);
 	g_signal_connect(widget, "toggled", G_CALLBACK(the_callback), (gpointer)CB_RADIO_WIFI);
-	gtk_box_pack_start(GTK_BOX(vbox), widget, FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(radio_box), widget, FALSE, FALSE, 0);
 	widget = gtk_radio_button_new_with_label(gtk_radio_button_group(GTK_RADIO_BUTTON(widget)), "Wifi Server Mode");
 	g_signal_connect(widget, "toggled", G_CALLBACK(the_callback), (gpointer)CB_WIFI_SRVR);
-	gtk_box_pack_start(GTK_BOX(vbox), widget, FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(radio_box), widget, FALSE, FALSE, 0);
 	widget = gtk_radio_button_new_with_label(gtk_radio_button_group(GTK_RADIO_BUTTON(widget)), "Bluetooth");
 	g_signal_connect(widget, "toggled", G_CALLBACK(the_callback), (gpointer)CB_RADIO_BTH);
-	gtk_box_pack_start(GTK_BOX(vbox), widget, FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(radio_box), widget, FALSE, FALSE, 0);
 	widget = gtk_radio_button_new_with_label(gtk_radio_button_group(GTK_RADIO_BUTTON(widget)), "USB (over adb)");
 	g_signal_connect(widget, "toggled", G_CALLBACK(the_callback), (gpointer)CB_RADIO_ADB);
-	gtk_box_pack_start(GTK_BOX(vbox), widget, FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(radio_box), widget, FALSE, FALSE, 0);
+
+	DroidCamGtkAddVideoPropertiesButton(radio_box);
+
+	gtk_box_pack_start(GTK_BOX(container_box), radio_box, FALSE, FALSE, 0);
+
+}
+
+
+/** 
+ * 
+ * @brief add text field to put IP address of android device
+ * 
+ * @param container_box 
+ */
+void DroidCamGtkAddIPField(GtkWidget *container_box)
+{
+	GtkWidget *ip_box = NULL;
+	GtkWidget *widget; // generic stuff
+
+	ip_box = gtk_hbox_new(FALSE, 1);
+	gtk_box_pack_start(GTK_BOX(ip_box), gtk_label_new("Phone IP:"), FALSE, FALSE, 0);
+	widget = gtk_entry_new_with_max_length(16);
+	gtk_widget_set_size_request(widget, 120, 30);
+	g_settings.ipEntry = (GtkEntry*)widget;
+	gtk_box_pack_start(GTK_BOX(ip_box), widget, FALSE, FALSE, 0);
+
+	widget = gtk_alignment_new(0,0,0,0);
+	gtk_container_add(GTK_CONTAINER(widget), ip_box);
+	gtk_box_pack_start(GTK_BOX(container_box), widget, FALSE, FALSE, 0);
+
+}
+
+
+/** 
+ * 
+ * @brief add text field to put remote port on which  android device listens
+ * 
+ * @param container_box 
+ */
+void DroidCamGtkAddPortField(GtkWidget *container_box)
+{
+	GtkWidget *port_box = NULL;
+	GtkWidget *widget; // generic stuff
+
+	port_box = gtk_hbox_new(FALSE, 1);
+	gtk_box_pack_start(GTK_BOX(port_box), gtk_label_new("DroidCam Port:"), FALSE, FALSE, 0);
+	widget = gtk_entry_new_with_max_length(5);
+	gtk_widget_set_size_request(widget, 60, 30);
+	g_settings.portEntry = (GtkEntry*)widget;
+	gtk_box_pack_start(GTK_BOX(port_box), widget, FALSE, FALSE, 0);
+
+	widget = gtk_alignment_new(0,0,0,0);
+	gtk_container_add(GTK_CONTAINER(widget), port_box);
+	gtk_box_pack_start(GTK_BOX(container_box), widget, FALSE, FALSE, 0);
+
+}
+
+
+void DroidCamGtkAddConnectButton(GtkWidget *container_box)
+{
+	GtkWidget *button_box = NULL;
+	GtkWidget *widget; // generic stuff
+
+	button_box = gtk_hbox_new(FALSE, 1);
+	widget = gtk_button_new_with_label("Connect");
+	gtk_widget_set_size_request(widget, 80, 30);
+	g_signal_connect(widget, "clicked", G_CALLBACK(the_callback), CB_BUTTON);
+	gtk_box_pack_start(GTK_BOX(button_box), widget, FALSE, FALSE, 0);
+	g_settings.button = (GtkButton*)widget;
+
+	widget = gtk_alignment_new(1,0,0,0);
+	gtk_container_add(GTK_CONTAINER(widget), button_box);
+	gtk_box_pack_start(GTK_BOX(container_box), widget, FALSE, FALSE, 10);
+
+}
+
+/** 
+ * 
+ * @brief add controls for the parameters for remote connection, 
+ *        i.e port/ip and button to initiate the connection
+ * 
+ * @param container_box 
+ */
+void DroidCamGtkAddConnParamsCtrl(GtkWidget *container_box)
+{
+	GtkWidget *hbox2;
+	GtkWidget *vbox = NULL;
+	GtkWidget *widget; // generic stuff
+
+	vbox = gtk_vbox_new(FALSE, 5);
+
+	DroidCamGtkAddIPField(vbox);
+
+	DroidCamGtkAddPortField(vbox);
+
+	DroidCamGtkAddConnectButton(vbox);
+
+	gtk_box_pack_start(GTK_BOX(container_box), vbox, FALSE, FALSE, 0);
+
+}
+
+
+/** 
+ * 
+ * @brief add window controls for 
+ *
+ * @param window - add controls there 
+ */
+void DroidCamGtkWindowAddControls(GtkWidget *window)
+{
+	GtkWidget *hbox= NULL;
+
+	hbox = gtk_hbox_new(FALSE, 50);
+	gtk_container_add(GTK_CONTAINER(window), hbox);
+
+	// Toggle buttons
+	DroidCamGtkAddTypeConnCtrl(hbox);
 
 	/* TODO: Figure out audio
 	widget = gtk_check_button_new_with_label("Enable Audio");
@@ -511,53 +674,25 @@ int main(int argc, char *argv[])
 	gtk_box_pack_start(GTK_BOX(vbox), widget, FALSE, FALSE, 5);
 	*/
 
-	hbox2 = gtk_hbox_new(FALSE, 1);
-	widget = gtk_button_new_with_label("...");
-	gtk_widget_set_size_request(widget, 40, 28);
-	g_signal_connect(widget, "clicked", G_CALLBACK(the_callback), (gpointer)CB_BTN_OTR);
-	gtk_box_pack_start(GTK_BOX(hbox2), widget, FALSE, FALSE, 0);
-	gtk_box_pack_start(GTK_BOX(vbox), hbox2, FALSE, FALSE, 0);
-
-	gtk_box_pack_start(GTK_BOX(hbox), vbox, FALSE, FALSE, 0);
-
 	// IP/Port/Button
+	DroidCamGtkAddConnParamsCtrl(hbox);
 
-	vbox = gtk_vbox_new(FALSE, 5);
+}
 
-	hbox2 = gtk_hbox_new(FALSE, 1);
-	gtk_box_pack_start(GTK_BOX(hbox2), gtk_label_new("Phone IP:"), FALSE, FALSE, 0);
-	widget = gtk_entry_new_with_max_length(16);
-	gtk_widget_set_size_request(widget, 120, 30);
-	g_settings.ipEntry = (GtkEntry*)widget;
-	gtk_box_pack_start(GTK_BOX(hbox2), widget, FALSE, FALSE, 0);
 
-	widget = gtk_alignment_new(0,0,0,0);
-	gtk_container_add(GTK_CONTAINER(widget), hbox2);
-	gtk_box_pack_start(GTK_BOX(vbox), widget, FALSE, FALSE, 0);
+int main(int argc, char *argv[])
+{
+	GtkWidget *window;
 
-	hbox2 = gtk_hbox_new(FALSE, 1);
-	gtk_box_pack_start(GTK_BOX(hbox2), gtk_label_new("DroidCam Port:"), FALSE, FALSE, 0);
-	widget = gtk_entry_new_with_max_length(5);
-	gtk_widget_set_size_request(widget, 60, 30);
-	g_settings.portEntry = (GtkEntry*)widget;
-	gtk_box_pack_start(GTK_BOX(hbox2), widget, FALSE, FALSE, 0);
+	// init threads
+	gdk_threads_init();
+	gtk_init(&argc, &argv);
 
-	widget = gtk_alignment_new(0,0,0,0);
-	gtk_container_add(GTK_CONTAINER(widget), hbox2);
-	gtk_box_pack_start(GTK_BOX(vbox), widget, FALSE, FALSE, 0);
+	window = DroidCamGtkWindow();
+	DroidCamGtkSetupAccelerators(window);
+	DroidCamGtkSetupMenu();
 
-	hbox2 = gtk_hbox_new(FALSE, 1);
-	widget = gtk_button_new_with_label("Connect");
-	gtk_widget_set_size_request(widget, 80, 30);
-	g_signal_connect(widget, "clicked", G_CALLBACK(the_callback), CB_BUTTON);
-	gtk_box_pack_start(GTK_BOX(hbox2), widget, FALSE, FALSE, 0);
-	g_settings.button = (GtkButton*)widget;
-
-	widget = gtk_alignment_new(1,0,0,0);
-	gtk_container_add(GTK_CONTAINER(widget), hbox2);
-	gtk_box_pack_start(GTK_BOX(vbox), widget, FALSE, FALSE, 10);
-
-	gtk_box_pack_start(GTK_BOX(hbox), vbox, FALSE, FALSE, 0);
+	DroidCamGtkWindowAddControls(window);
 
 	g_signal_connect(window, "destroy", G_CALLBACK (gtk_main_quit), NULL);
 	gtk_widget_show_all(window);
