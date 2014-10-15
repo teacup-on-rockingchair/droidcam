@@ -635,9 +635,7 @@ void DroidCamGtkAddConnectButton(GtkWidget *container_box)
  */
 void DroidCamGtkAddConnParamsCtrl(GtkWidget *container_box)
 {
-	GtkWidget *hbox2;
 	GtkWidget *vbox = NULL;
-	GtkWidget *widget; // generic stuff
 
 	vbox = gtk_vbox_new(FALSE, 5);
 
