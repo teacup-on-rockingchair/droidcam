@@ -38,6 +38,8 @@ enum control_code {
 	CB_CONTROL_LED, // 9
 };
 
+#define CB_CHK_VIDEO_CTRL_CODE(cb) ((cb >= CB_CONTROL_ZIN) && (cb <= CB_CONTROL_LED))
+
 struct settings {
 	GtkEntry * ipEntry;
 	GtkEntry * portEntry;
@@ -315,109 +317,299 @@ accel_callback( GtkAccelGroup  *group,
 }
 
 
-static void the_callback(GtkWidget* widget, gpointer extra)
+/** 
+ * 
+ * @brief callback for following UI commands:
+ *
+ * CB_CONTROL_ZIN  : zoom in
+ * CB_CONTROL_ZOUT : zoom out
+ * CB_CONTROL_AF   : autofocus
+ * CB_CONTROL_LED  : toggle led
+ *
+ * 
+ * @param widget 
+ * @param extra 
+ */
+static void video_params_callback(GtkWidget* widget, gpointer extra)
 {
 	int cb = (int) extra;
-	gboolean ipEdit = TRUE;
-	gboolean portEdit = TRUE;
-	char * text = NULL;
 
-_up:
 	dbgprint("the_cb=%d\n", cb);
-	switch (cb) {
-		case CB_BUTTON:
-			if (v_running)
-			{
-				StopVideo();
-				cb = (int)g_settings.connection;
-				goto _up;
-			}
-			else // START
-			{
-				char * ip = NULL;
-				SOCKET s = INVALID_SOCKET;
-				int port = atoi(gtk_entry_get_text(g_settings.portEntry));
-				LoadSaveSettings(0); // Save
+	if (!CB_CHK_VIDEO_CTRL_CODE(cb))
+		return;
 
-				if (g_settings.connection == CB_RADIO_ADB) {
-					if (CheckAdbDevices(port) != 8) return;
-					ip = "127.0.0.1";
-				} else if (g_settings.connection == CB_RADIO_WIFI && wifi_srvr_mode == 0) {
-					ip = (char *)gtk_entry_get_text(g_settings.ipEntry);
-				}
-
-				if (ip != NULL) // Not Bluetooth or "Server Mode", so connect first
-				{
-					if (strlen(ip) < 7 || port < 1024) {
-						MSG_ERROR("You must enter the correct IP address (and port) to connect to.");
-						break;
-					}
-					gtk_button_set_label(g_settings.button, "Please wait");
-					s = connectDroidCam(ip, port);
-
-					if (s == INVALID_SOCKET)
-					{
-						dbgprint("failed");
-						gtk_button_set_label(g_settings.button, "Connect");
-						break;
-					}
-				}
-
-				hVideoThread = g_thread_new("VideoThreadProc" , VideoThreadProc, (void*)s);
-				gtk_button_set_label(g_settings.button, "Stop");
-				//gtk_widget_set_sensitive(GTK_WIDGET(g_settings.button), FALSE);
-
-				gtk_widget_set_sensitive(GTK_WIDGET(g_settings.ipEntry), FALSE);
-				gtk_widget_set_sensitive(GTK_WIDGET(g_settings.portEntry), FALSE);
-			}
-		break;
-		case CB_WIFI_SRVR:
-			wifi_srvr_mode = !wifi_srvr_mode;
-			if (g_settings.connection != CB_RADIO_WIFI)
-				break;
-		// else : fall through
-		case CB_RADIO_WIFI:
-		g_settings.connection = CB_RADIO_WIFI;
-		if (wifi_srvr_mode){
-			text = "Prepare";
-			ipEdit = FALSE;
-		}
-		else {
-			text = "Connect";
-		}
-		break;
-		case CB_RADIO_BTH:
-			g_settings.connection = CB_RADIO_BTH;
-			text = "Prepare";
-			ipEdit   = FALSE;
-			portEdit = FALSE;
-		break;
-		case CB_RADIO_ADB:
-			g_settings.connection = CB_RADIO_ADB;
-			text = "Connect";
-			ipEdit = FALSE;
-		break;
-		case CB_BTN_OTR:
-			gtk_menu_popup(GTK_MENU(menu), NULL, NULL, NULL, NULL, 0, 0);
-		break;
-		case CB_CONTROL_ZIN  :
-		case CB_CONTROL_ZOUT :
-		case CB_CONTROL_AF   :
-		case CB_CONTROL_LED  :
-		if(v_running == 1 && thread_cmd ==0 && m_format != VIDEO_FMT_H263){
-			thread_cmd =  cb - 10;
-		}
-		break;
-		case CB_AUDIO:
-			g_settings.audio = !g_settings.audio;
-		break;
+	if(v_running == 1 && thread_cmd ==0 && m_format != VIDEO_FMT_H263){
+		thread_cmd =  cb - 10;
 	}
+	
+}
 
-	if (text != NULL && v_running == 0){
-		gtk_button_set_label(g_settings.button, text);
+
+
+/** 
+ * 
+ * @brief update UI controls with labels sensitive to the type of connection we are using
+ * 
+ * @param buttonLabel 
+ * @param ipEdit 
+ * @param portEdit 
+ */
+static inline void DroidCamGtkUpdateConnectionsSensitiveFields(char *buttonLabel, gboolean ipEdit, gboolean portEdit)
+{
+	if (buttonLabel != NULL && v_running == 0){
+		gtk_button_set_label(g_settings.button, buttonLabel);
 		gtk_widget_set_sensitive(GTK_WIDGET(g_settings.ipEntry), ipEdit);
 		gtk_widget_set_sensitive(GTK_WIDGET(g_settings.portEntry), portEdit);
 	}
+}
+
+/** 
+ * 
+ * @brief popup menu button handler
+ * 
+ * @param widget 
+ * @param extra 
+ */
+static void DroidCamPopupBtnCallback(GtkWidget *widget, gpointer extra)
+{
+	int cb = (int) extra;
+	
+	dbgprint("the_cb=%d\n", cb);
+	if(cb !=  CB_BTN_OTR)
+		return;
+	gtk_menu_popup(GTK_MENU(menu), NULL, NULL, NULL, NULL, 0, 0);
+}
+
+
+/** 
+ * 
+ * @brief handle audio settings control
+ * 
+ * @param widget 
+ * @param extra 
+ */
+/* static */ void DroidCamAudioBtnCallback(GtkWidget* widget, gpointer extra)
+{
+	int cb = (int) extra;
+
+	dbgprint("the_cb=%d\n", cb);
+	if(cb != CB_AUDIO)
+		return;
+	g_settings.audio = !g_settings.audio;
+		
+}
+
+/** 
+ * 
+ * @brief handle radio button to enable connection via adb
+ * 
+ * @param widget 
+ * @param extra 
+ */
+static void DroidCamAdbRadioCallback(GtkWidget* widget, gpointer extra)
+{
+	int cb = (int) extra;
+
+	dbgprint("the_cb=%d\n", cb);	 
+	if(cb != CB_RADIO_ADB)
+		return;
+
+	g_settings.connection = CB_RADIO_ADB;
+
+	DroidCamGtkUpdateConnectionsSensitiveFields("Connect", FALSE, TRUE);
+	
+}
+
+
+/** 
+ * 
+ * @brief handle radio button to enable connection via bluetooth
+ * 
+ * @param widget 
+ * @param extra 
+ */
+static void DroidCamBthRadioCallback(GtkWidget* widget, gpointer extra)
+{
+	int cb = (int) extra;
+
+	dbgprint("the_cb=%d\n", cb);	 
+	if(cb != CB_RADIO_BTH)
+		return;
+
+	g_settings.connection = CB_RADIO_BTH;
+
+	DroidCamGtkUpdateConnectionsSensitiveFields("Prepare", FALSE, FALSE);
+
+}
+
+
+
+/** 
+ * 
+ * @brief prepare UI for WIFI connection details
+ * 
+ */
+static inline void DroidCamPrepareWifiConnectionUi()
+{
+	gboolean ipEdit = TRUE;
+	char * text = NULL;
+
+	g_settings.connection = CB_RADIO_WIFI;
+	if (wifi_srvr_mode){
+		text = "Prepare";
+		ipEdit = FALSE;
+	}
+	else {
+		text = "Connect";
+	}
+
+	DroidCamGtkUpdateConnectionsSensitiveFields(text, ipEdit, TRUE);
+}
+
+/** 
+ * 
+ * @brief handle radio button for wifi/lan mode
+ * 
+ * @param widget 
+ * @param extra 
+ */
+static void DroidCamWifiRadioCallback(GtkWidget* widget, gpointer extra)
+{
+	int cb = (int) extra;
+
+	dbgprint("the_cb=%d\n", cb);
+	if(cb != CB_RADIO_WIFI)
+		return;
+
+	DroidCamPrepareWifiConnectionUi();
+}
+
+
+
+/** 
+ * 
+ * @brief handle radio button for wifi server
+ * 
+ * @param widget 
+ * @param extra 
+ */
+static void DroidCamWifiServerRadioCallback(GtkWidget* widget, gpointer extra)
+{
+	int cb = (int) extra;
+
+	dbgprint("the_cb=%d\n", cb);
+	if(cb != CB_WIFI_SRVR)
+		return;
+	wifi_srvr_mode = !wifi_srvr_mode;
+	if (g_settings.connection != CB_RADIO_WIFI)
+		return;
+	DroidCamPrepareWifiConnectionUi();
+
+}
+
+/** 
+ * 
+ * @brief update UI controls for connection parameters after we stop one connection
+ * 
+ * @param widget 
+ * @param callback 
+ */
+static void DroidCamUpdateConnectionParamsUi(GtkWidget* widget, int callback)
+{
+	dbgprint("the_cb=%d\n", callback);
+	switch(callback){
+	case CB_RADIO_ADB:
+		DroidCamAdbRadioCallback(widget, (gpointer)callback);
+		break;
+	case CB_RADIO_WIFI:
+		DroidCamWifiRadioCallback(widget, (gpointer)callback);
+		break;
+	case CB_WIFI_SRVR:
+		DroidCamWifiServerRadioCallback(widget, (gpointer)callback);
+		break;
+	case CB_RADIO_BTH:
+		DroidCamBthRadioCallback(widget, (gpointer)callback);
+		break;
+	default:
+		dbgprint("no handler for cb %d", callback);
+		break;
+	}
+}
+
+/** 
+ * 
+ * @brief handle connection button press when it is stopping the active connection
+ *
+ * @param widget 
+ * 
+ */
+static inline void DroidCamBtnStopConnection(GtkWidget* widget)
+{
+	StopVideo();
+	DroidCamUpdateConnectionParamsUi(widget, (int)g_settings.connection);
+}
+
+/** 
+ * 
+ * @brief handle press connection button to initiate connection
+ * 
+ */
+static inline void DroidCamBtnStartConnection()
+{
+	char * ip = NULL;
+	SOCKET s = INVALID_SOCKET;
+	int port = atoi(gtk_entry_get_text(g_settings.portEntry));
+	LoadSaveSettings(0); // Save
+	
+	if (g_settings.connection == CB_RADIO_ADB) {
+		if (CheckAdbDevices(port) != 8) 
+			return;
+		ip = "127.0.0.1";
+	} else if (g_settings.connection == CB_RADIO_WIFI && wifi_srvr_mode == 0) {
+		ip = (char *)gtk_entry_get_text(g_settings.ipEntry);
+	}
+	
+	if (ip != NULL) // Not Bluetooth or "Server Mode", so connect first
+		{
+			if (strlen(ip) < 7 || port < 1024) {
+				MSG_ERROR("You must enter the correct IP address (and port) to connect to.");
+				return;
+			}
+			gtk_button_set_label(g_settings.button, "Please wait");
+			s = connectDroidCam(ip, port);
+			
+			if (s == INVALID_SOCKET)
+				{
+					dbgprint("failed");
+					gtk_button_set_label(g_settings.button, "Connect");
+					return;
+				}
+		}
+	
+	hVideoThread = g_thread_new("VideoThreadProc" , VideoThreadProc, (void*)s);
+	gtk_button_set_label(g_settings.button, "Stop");
+	//gtk_widget_set_sensitive(GTK_WIDGET(g_settings.button), FALSE);
+
+	gtk_widget_set_sensitive(GTK_WIDGET(g_settings.ipEntry), FALSE);
+	gtk_widget_set_sensitive(GTK_WIDGET(g_settings.portEntry), FALSE);
+}
+
+
+
+static void DroidCamConnectionBtnCallback(GtkWidget* widget, gpointer extra)
+{
+	int cb = (int) extra;
+
+	dbgprint("the_cb=%d\n", cb);
+	
+	if(cb != CB_BUTTON)
+		return;
+	if (v_running)
+		DroidCamBtnStopConnection(widget);
+	else // START
+		DroidCamBtnStartConnection();
+
+	
 }
 
 /** 
@@ -488,22 +680,22 @@ void DroidCamGtkSetupMenu()
 	widget = gtk_menu_item_new_with_label("Auto-Focus (Ctrl+A)");
 	gtk_menu_append (GTK_MENU(menu), widget);
 	gtk_widget_show (widget);
-	g_signal_connect(widget, "activate", G_CALLBACK(the_callback), (gpointer)CB_CONTROL_AF);
+	g_signal_connect(widget, "activate", G_CALLBACK(video_params_callback), (gpointer)CB_CONTROL_AF);
 
 	widget = gtk_menu_item_new_with_label("Toggle LED Flash (Ctrl+L)");
 	gtk_menu_append (GTK_MENU(menu), widget);
 	gtk_widget_show (widget);
-	g_signal_connect(widget, "activate", G_CALLBACK(the_callback), (gpointer)CB_CONTROL_LED);
+	g_signal_connect(widget, "activate", G_CALLBACK(video_params_callback), (gpointer)CB_CONTROL_LED);
 
 	widget = gtk_menu_item_new_with_label("Zoom In (+)");
    	gtk_menu_append (GTK_MENU(menu), widget);
 	gtk_widget_show (widget);
-	g_signal_connect(widget, "activate", G_CALLBACK(the_callback), (gpointer)CB_CONTROL_ZIN);
+	g_signal_connect(widget, "activate", G_CALLBACK(video_params_callback), (gpointer)CB_CONTROL_ZIN);
 
 	widget = gtk_menu_item_new_with_label("Zoom Out (-)");
 	gtk_menu_append (GTK_MENU(menu), widget);
 	gtk_widget_show (widget);
-	g_signal_connect(widget, "activate", G_CALLBACK(the_callback), (gpointer)CB_CONTROL_ZOUT);
+	g_signal_connect(widget, "activate", G_CALLBACK(video_params_callback), (gpointer)CB_CONTROL_ZOUT);
 
 }
 
@@ -515,7 +707,7 @@ void DroidCamGtkAddVideoPropertiesButton(GtkWidget *container_box)
 	button_box = gtk_hbox_new(FALSE, 1);
 	widget = gtk_button_new_with_label("...");
 	gtk_widget_set_size_request(widget, 40, 28);
-	g_signal_connect(widget, "clicked", G_CALLBACK(the_callback), (gpointer)CB_BTN_OTR);
+	g_signal_connect(widget, "clicked", G_CALLBACK(DroidCamPopupBtnCallback), (gpointer)CB_BTN_OTR);
 	gtk_box_pack_start(GTK_BOX(button_box), widget, FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(container_box), button_box, FALSE, FALSE, 0);
 
@@ -539,16 +731,16 @@ void DroidCamGtkAddTypeConnCtrl(GtkWidget *container_box)
 
 	widget = gtk_radio_button_new_with_label(NULL, "WiFi / LAN");
 	gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON(widget), TRUE);
-	g_signal_connect(widget, "toggled", G_CALLBACK(the_callback), (gpointer)CB_RADIO_WIFI);
+	g_signal_connect(widget, "toggled", G_CALLBACK(DroidCamWifiRadioCallback), (gpointer)CB_RADIO_WIFI);
 	gtk_box_pack_start(GTK_BOX(radio_box), widget, FALSE, FALSE, 0);
 	widget = gtk_radio_button_new_with_label(gtk_radio_button_group(GTK_RADIO_BUTTON(widget)), "Wifi Server Mode");
-	g_signal_connect(widget, "toggled", G_CALLBACK(the_callback), (gpointer)CB_WIFI_SRVR);
+	g_signal_connect(widget, "toggled", G_CALLBACK(DroidCamWifiServerRadioCallback), (gpointer)CB_WIFI_SRVR);
 	gtk_box_pack_start(GTK_BOX(radio_box), widget, FALSE, FALSE, 0);
 	widget = gtk_radio_button_new_with_label(gtk_radio_button_group(GTK_RADIO_BUTTON(widget)), "Bluetooth");
-	g_signal_connect(widget, "toggled", G_CALLBACK(the_callback), (gpointer)CB_RADIO_BTH);
+	g_signal_connect(widget, "toggled", G_CALLBACK(DroidCamBthRadioCallback), (gpointer)CB_RADIO_BTH);
 	gtk_box_pack_start(GTK_BOX(radio_box), widget, FALSE, FALSE, 0);
 	widget = gtk_radio_button_new_with_label(gtk_radio_button_group(GTK_RADIO_BUTTON(widget)), "USB (over adb)");
-	g_signal_connect(widget, "toggled", G_CALLBACK(the_callback), (gpointer)CB_RADIO_ADB);
+	g_signal_connect(widget, "toggled", G_CALLBACK(DroidCamAdbRadioCallback), (gpointer)CB_RADIO_ADB);
 	gtk_box_pack_start(GTK_BOX(radio_box), widget, FALSE, FALSE, 0);
 
 	DroidCamGtkAddVideoPropertiesButton(radio_box);
@@ -616,7 +808,7 @@ void DroidCamGtkAddConnectButton(GtkWidget *container_box)
 	button_box = gtk_hbox_new(FALSE, 1);
 	widget = gtk_button_new_with_label("Connect");
 	gtk_widget_set_size_request(widget, 80, 30);
-	g_signal_connect(widget, "clicked", G_CALLBACK(the_callback), CB_BUTTON);
+	g_signal_connect(widget, "clicked", G_CALLBACK(DroidCamConnectionBtnCallback), CB_BUTTON);
 	gtk_box_pack_start(GTK_BOX(button_box), widget, FALSE, FALSE, 0);
 	g_settings.button = (GtkButton*)widget;
 
@@ -668,7 +860,7 @@ void DroidCamGtkWindowAddControls(GtkWidget *window)
 
 	/* TODO: Figure out audio
 	widget = gtk_check_button_new_with_label("Enable Audio");
-	g_signal_connect(widget, "toggled", G_CALLBACK(the_callback), (gpointer)CB_AUDIO);
+	g_signal_connect(widget, "toggled", G_CALLBACK(DroidCamAudioBtnCallback), (gpointer)CB_AUDIO);
 	gtk_box_pack_start(GTK_BOX(vbox), widget, FALSE, FALSE, 5);
 	*/
 
