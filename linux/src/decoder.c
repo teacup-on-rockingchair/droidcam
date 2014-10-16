@@ -430,7 +430,8 @@ int DecodeAudio(char * data, int length){
 	//		dbgprint("AUDIO DECODE ERROR len=%d fmt=%d\n", len, a_context->sample_fmt);
 	//		return FALSE;
 	//	}
-    return FALSE;
+	dbgprint("Read audio data with length %d", length);
+    return TRUE;
 }
 
 int GetVideoWidth(){

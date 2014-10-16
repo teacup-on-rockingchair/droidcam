@@ -53,7 +53,9 @@ struct settings {
 /* Globals */
 GtkWidget *menu;
 GThread* hVideoThread;
+GThread* hAudioThread;
 int v_running = 0;
+int a_running = 0;
 int thread_cmd = 0;
 int wifi_srvr_mode = 0;
 struct settings g_settings = {0};
@@ -169,14 +171,15 @@ static void LoadSaveSettings(int load)
 }
 
 /* Audio Thread */
-#if 0
+
+/* Audio Thread */
 void * AudioThreadProc(void * args)
 {
 	char stream_buf[AUDIO_INBUF_SZ + 16]; // padded so libavcodec detects the end
-	SOCKET audioSocket = (SOCKET)lpParam;
-	dbgprint("Audio Thread Started\n");
-	a_running = true;
-	..
+	SOCKET audioSocket = (SOCKET)args;
+	printf("Audio Thread Started\n");
+	a_running = 1;
+	
 	// Send HTTP request
 	strcpy(stream_buf, AUDIO_REQ);
 	if ( SendRecv(1, stream_buf, sizeof(AUDIO_REQ), audioSocket) <= 0){
@@ -189,20 +192,23 @@ void * AudioThreadProc(void * args)
 		MSG_ERROR("Connection reset (audio)!\nDroidCam is probably busy with another client.");
 		goto _out;
 	}
-	..
-	dbgprint("Starting audio stream .. \n");
+	
+	dbgprint("Starting audio stream .. %s\n",stream_buf);
 	memset(stream_buf, 0, sizeof(stream_buf));
 	while (a_running) {
 		if ( SendRecv(0, stream_buf, AUDIO_INBUF_SZ, audioSocket) == FALSE 
 			|| DecodeAudio(stream_buf, AUDIO_INBUF_SZ) == FALSE) 
 			break;
+		dbgprint("Current audio stream .. %s\n",stream_buf);
+
 	}
 _out:
 	//cleanup
 	dbgprint("Audio Thread Exiting\n");
-	return TRUE;
+	disconnect(audioSocket);
+	return NULL;
 }
-#endif
+
 
 /* Video Thread */
 void * VideoThreadProc(void * args)
@@ -272,7 +278,7 @@ _out:
 	// gtk_widget_set_sensitive(GTK_WIDGET(g_settings.button), TRUE);
 	// gdk_threads_leave();
 	dbgprint("Video Thread End\n");
-	return 0;
+	return NULL;
 }
 
 static void StopVideo()
@@ -557,7 +563,7 @@ static inline void DroidCamBtnStopConnection(GtkWidget* widget)
 static inline void DroidCamBtnStartConnection()
 {
 	char * ip = NULL;
-	SOCKET s = INVALID_SOCKET;
+	SOCKET vs = INVALID_SOCKET, as = INVALID_SOCKET;
 	int port = atoi(gtk_entry_get_text(g_settings.portEntry));
 	LoadSaveSettings(0); // Save
 	
@@ -576,17 +582,24 @@ static inline void DroidCamBtnStartConnection()
 				return;
 			}
 			gtk_button_set_label(g_settings.button, "Please wait");
-			s = connectDroidCam(ip, port);
+			vs = connectDroidCam(ip, port);
 			
-			if (s == INVALID_SOCKET)
-				{
-					dbgprint("failed");
-					gtk_button_set_label(g_settings.button, "Connect");
-					return;
-				}
+			if (vs == INVALID_SOCKET){
+				dbgprint("failed video connection");
+				gtk_button_set_label(g_settings.button, "Connect");
+				return;
+			}
+			
+			as = connectDroidCam(ip, port);
+			if (as == INVALID_SOCKET){
+				dbgprint("failed audio connection");
+				if(vs != INVALID_SOCKET)
+					disconnect(vs);
+				return;
+			}
 		}
-	
-	hVideoThread = g_thread_new("VideoThreadProc" , VideoThreadProc, (void*)s);
+	hAudioThread = g_thread_new("AudioThreadProc" , AudioThreadProc, (void*)as);
+	hVideoThread = g_thread_new("VideoThreadProc" , VideoThreadProc, (void*)vs);
 	gtk_button_set_label(g_settings.button, "Stop");
 	//gtk_widget_set_sensitive(GTK_WIDGET(g_settings.button), FALSE);
 
